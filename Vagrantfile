@@ -8,10 +8,11 @@ VAGRANTFILE_API_VERSION = "2"
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # specify memory size in MiB
-  vm_ram = ENV['VAGRANT_VM_RAM'] || 4096
-  vm_cpu = ENV['VAGRANT_VM_CPU'] || 2
+  vm_ram = ENV['VAGRANT_VM_RAM'] || 8192
+  vm_cpu = ENV['VAGRANT_VM_CPU'] || 8
   vm_ram_bytes = vm_ram * 1024 * 1024
 
+  config.vm.synced_folder "./", "/vagrant"
   config.vm.hostname = "gdal-vagrant"
   config.vm.host_name = "gdal-vagrant"
 
@@ -34,15 +35,24 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # See https://bugs.launchpad.net/cloud-images/+bug/1969664
   # Ubuntu 22.04 no longer accepts RSA keys, which causes issues with older Vagrant
   # The below location has a jammy64 image that accepts RSA keys
-  config.vm.box_url = "https://people.canonical.com/~jchittum/vagrant-testing/ubuntu-jammy-vagrant-TESTING-20220419.box"
-  config.vm.box = "ubuntu/jammy64"
+  config.vm.box = "generic/debian12"
+  config.vm.box_version = "4.3.12"
 
   config.vm.provider :virtualbox do |vb|
      vb.customize ["modifyvm", :id, "--memory", vm_ram]
      vb.customize ["modifyvm", :id, "--cpus", vm_cpu]
      vb.customize ["modifyvm", :id, "--ioapic", "on"]
      vb.name = "gdal-vagrant"
+     
+     # vb.gui = true
   end
+
+  config.vm.provision "shell", inline: <<-SHELL
+     sudo apt install gnupg2
+     sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+     curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+  SHELL
 
   #config.vm.provider :lxc do |lxc,ovrd|
   #  ovrd.vm.box = "cultuurnet/ubuntu-14.04-64-puppet"
@@ -77,15 +87,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       }
   end
 
-  # Unless explicitly declined, use the VM host's file system to cache
-  # .deb files to avoid repeated downloads on each vagrant up
-  unless File.exists?("../.no_apt_cache")
-    cache_dir = "../apt-cache/#{config.vm.box}"
-    FileUtils.mkdir_p(cache_dir) unless Dir.exists?(cache_dir)
-    puts "Using local apt cache, #{cache_dir}"
-    config.vm.synced_folder cache_dir, "/var/cache/apt/archives"
-  end
-
   ppaRepos = [
   ]
 
@@ -115,7 +116,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     "bash-completion",
     "swig",
     "ant",
-    "openjdk-11-jdk",
+    "openjdk-17-jdk",
     "mono-mcs",
     "mono-runtime",
     "libmono-system-drawing4.0-cil",
@@ -124,8 +125,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     "python3-setuptools",
     "python3-pip",
     "postgis",
-    "postgresql",
-    "postgresql-postgis",
+    "postgresql-14",
+    "postgresql-14-postgis-3",
     "gpsbabel",
     "doxygen",
     "libproj-dev",
@@ -159,7 +160,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     "libcrypto++-dev",
     "libfyba-dev",
     "libkml-dev",
-    "libmysqlclient-dev",
+    "libmariadb-dev",
     "libogdi-dev",
     "libcfitsio-dev",
     "libzstd-dev",
@@ -177,6 +178,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     "libqhull-dev",
     "libjson-c-dev",
     "libtiff5-dev",
+    "libgtest-dev",
   ];
 
   config.ssh.forward_agent = true
@@ -191,7 +193,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     # install packages we need
     pkg_cmd << "apt-get update -qq; "
     pkg_cmd << "apt-get --no-install-recommends install -q -y " + packageList.join(" ") << " ; "
-
+    pkg_cmd << "pip install pytest filelock lxml --break-system-package; "
+    
     # setup environment when we log in
     pkg_cmd << "echo 'CCACHE_DIR=/vagrant/ccache_vagrant' >> /etc/environment; "
     pkg_cmd << "echo 'cd /vagrant/build_vagrant; source /vagrant/scripts/setdevenv.sh' >> /home/vagrant/.bashrc; "

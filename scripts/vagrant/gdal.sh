@@ -26,9 +26,8 @@ cmake .. \
   -GNinja \
   -DCMAKE_INSTALL_PREFIX=/opt/gdal-dev \
   -DUSE_CCACHE=ON \
-  -DUSE_ALTERNATE_LINKER:STRING=mold \
   -DCMAKE_BUILD_TYPE=Debug
 ninja -j6
 sudo ninja install
 
-PYTHON_CMD=python3 && $PYTHON_CMD -m pip install -r ../autotest/requirements.txt
+PYTHON_CMD=python3 && $PYTHON_CMD -m pip install -r ../autotest/requirements.txt --break-system-packages
